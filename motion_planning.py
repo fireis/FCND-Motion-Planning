@@ -111,37 +111,81 @@ class MotionPlanning(Drone):
         data = msgpack.dumps(self.waypoints)
         self.connection._master.write(data)
 
+    def prune_path(self, path):
+        SIMPLE_PRUNING = True
+
+        if SIMPLE_PRUNING:
+            n = 0
+            i = 0
+            new_path = [path[n+i]]
+            # let's check if we have steps in which we change only one coordinate
+            while n + 1 < len(path):
+                # we check for similarities on each step, stopping at a difference (or at a safety distance)
+                while n + i + 1 < len(path):
+                    if path[n][0] == path[n + i][0]  and i < 7:
+                        i += 1
+                    else:
+                        break
+                while n + i + 1 < len(path):
+                    if path[n][1] == path[n + i][1]  and i < 7:
+                        i += 1
+                    else:
+                        break
+                n += i
+                new_path.append(path[n])
+                i = 0
+
+        return new_path
+
+
     def plan_path(self):
         self.flight_state = States.PLANNING
         print("Searching for a path ...")
         TARGET_ALTITUDE = 5
-        SAFETY_DISTANCE = 5
+        SAFETY_DISTANCE = 6
 
         self.target_position[2] = TARGET_ALTITUDE
-
         # TODO: read lat0, lon0 from colliders into floating point values
-        
+        import csv
+
+        # We have to open colliders as text to get the first line
+        with open('colliders.csv', newline='') as colliders:
+            reader = csv.reader(colliders)
+            origin = next(reader)
+            lat0 = np.float64(origin[0].split(' ')[1].lstrip())
+            lon0 = np.float64(origin[1].split(' ')[2].lstrip())
+
         # TODO: set home position to (lon0, lat0, 0)
+        self.set_home_position(lon0, lat0, 0)
 
         # TODO: retrieve current global position
- 
+        global_position = self.global_position
+
         # TODO: convert to current local position using global_to_local()
-        
+        current_local_position = global_to_local(global_position, self.global_home)
+
         print('global home {0}, position {1}, local position {2}'.format(self.global_home, self.global_position,
-                                                                         self.local_position))
+                                                                         current_local_position))
+
         # Read in obstacle map
         data = np.loadtxt('colliders.csv', delimiter=',', dtype='Float64', skiprows=2)
-        
+
         # Define a grid for a particular altitude and safety margin around obstacles
         grid, north_offset, east_offset = create_grid(data, TARGET_ALTITUDE, SAFETY_DISTANCE)
         print("North offset = {0}, east offset = {1}".format(north_offset, east_offset))
         # Define starting point on the grid (this is just grid center)
         grid_start = (-north_offset, -east_offset)
+
         # TODO: convert start position to current position rather than map center
-        
+        current_position = (int(self.local_position[0]+grid_start[0]), int(self.local_position[1]+grid_start[1]))
+
+
         # Set goal as some arbitrary position on the grid
         grid_goal = (-north_offset + 10, -east_offset + 10)
+
         # TODO: adapt to set goal as latitude / longitude position and convert
+        goal_local_pos = global_to_local([-122.401950, 37.794433, self.global_home[2]], self.global_home)
+        grid_goal = (int(goal_local_pos[0] - north_offset), int(goal_local_pos[1] - east_offset))
 
         # Run A* to find a path from start to goal
         # TODO: add diagonal motions with a cost of sqrt(2) to your A* implementation
@@ -149,6 +193,12 @@ class MotionPlanning(Drone):
         print('Local Start and Goal: ', grid_start, grid_goal)
         path, _ = a_star(grid, heuristic, grid_start, grid_goal)
         # TODO: prune path to minimize number of waypoints
+
+        print("path size before pruning: {0}".format(len(path)))
+        path = self.prune_path(path)
+        print("path size after pruning: {0}".format(len(path)))
+
+
         # TODO (if you're feeling ambitious): Try a different approach altogether!
 
         # Convert path to waypoints
