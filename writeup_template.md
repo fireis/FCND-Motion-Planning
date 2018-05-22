@@ -55,7 +55,9 @@ To set my current local position, I´ve used `global_to_local` function, as can 
 
         # TODO: convert to current local position using global_to_local()
         current_local_position = global_to_local(global_position, self.global_home)
-
+        
+        current_position = (int(self.local_position[0]+grid_start[0]), int(self.local_position[1]+grid_start[1]))
+        grid_start = current_position
 
 #### 3. Set grid start position from local position
 
@@ -99,29 +101,29 @@ After the actions were created, I´ve added the necessary validity check:
         valid_actions.remove(Action.NORTH_WEST)
 
 #### 6. Cull waypoints 
-Here I´ve worked with a simple yet effective path pruning, checking for changes in each dimension. The downside of this approach is the lack of pruning for diagonal moves:
+Here I´ve worked with a simple yet effective path pruning, checking for collinearity using similar code to what was presented on Collinearity lesson, using the 2D case multiple times to reduce even more the amount of paths:
 
+    def prune_path(self, path):
+        n = 0
+        i = 0
+
+        while i <= 3 :
             n = 0
-            i = 0
-            new_path = [path[n+i]]
-            # let's check if we have steps in which we change only one coordinate
-            while n + 1 < len(path):
-                # we check for similarities on each step, stopping at a difference (or at a safety distance)
-                while n + i + 1 < len(path):
-                    if path[n][0] == path[n + i][0]  and i < 7:
-                        i += 1
-                    else:
-                        break
-                while n + i + 1 < len(path):
-                    if path[n][1] == path[n + i][1]  and i < 7:
-                        i += 1
-                    else:
-                        break
-                n += i
-                new_path.append(path[n])
-                i = 0
-
-        return new_path 
+            new_path = []
+            while n + 3 < len(path):
+                det = path[0][0]*(path[1][1] - path[2][1]) +\
+                      path[1][0]*(path[2][1] - path[0][1]) +\
+                      path[2][0]*(path[0][1] - path[1][1])
+                if det == 0:
+                    new_path.append(path[n+2])
+                else:
+                    new_path.append(path[n])
+                    new_path.append(path[n+1])
+                    new_path.append(path[n+2])
+                n = n+3
+            path = new_path
+            i += 1
+        return new_path
 
 
 ### Execute the flight

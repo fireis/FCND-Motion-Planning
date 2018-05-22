@@ -112,29 +112,25 @@ class MotionPlanning(Drone):
         self.connection._master.write(data)
 
     def prune_path(self, path):
-        SIMPLE_PRUNING = True
+        n = 0
+        i = 0
 
-        if SIMPLE_PRUNING:
+        while i <= 3 :
             n = 0
-            i = 0
-            new_path = [path[n+i]]
-            # let's check if we have steps in which we change only one coordinate
-            while n + 1 < len(path):
-                # we check for similarities on each step, stopping at a difference (or at a safety distance)
-                while n + i + 1 < len(path):
-                    if path[n][0] == path[n + i][0]  and i < 7:
-                        i += 1
-                    else:
-                        break
-                while n + i + 1 < len(path):
-                    if path[n][1] == path[n + i][1]  and i < 7:
-                        i += 1
-                    else:
-                        break
-                n += i
-                new_path.append(path[n])
-                i = 0
-
+            new_path = []
+            while n + 3 < len(path):
+                det = path[0][0]*(path[1][1] - path[2][1]) +\
+                      path[1][0]*(path[2][1] - path[0][1]) +\
+                      path[2][0]*(path[0][1] - path[1][1])
+                if det == 0:
+                    new_path.append(path[n+2])
+                else:
+                    new_path.append(path[n])
+                    new_path.append(path[n+1])
+                    new_path.append(path[n+2])
+                n = n+3
+            path = new_path
+            i += 1
         return new_path
 
 
@@ -178,7 +174,7 @@ class MotionPlanning(Drone):
 
         # TODO: convert start position to current position rather than map center
         current_position = (int(self.local_position[0]+grid_start[0]), int(self.local_position[1]+grid_start[1]))
-
+        grid_start = current_position
 
         # Set goal as some arbitrary position on the grid
         grid_goal = (-north_offset + 10, -east_offset + 10)
@@ -196,6 +192,7 @@ class MotionPlanning(Drone):
 
         print("path size before pruning: {0}".format(len(path)))
         path = self.prune_path(path)
+
         print("path size after pruning: {0}".format(len(path)))
 
 
